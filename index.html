@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>蔚蓝档案 - 记忆大厅</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            min-height: 100vh;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            color: #fff;
+            padding: 20px;
+            padding-bottom: 80px;
+        }
+        .bg-container {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: -2;
+            background: #1a1c2e;
+        }
+        .bg-image, .bg-video {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            object-fit: cover;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+        .bg-image.active, .bg-video.active { opacity: 1; }
+        .bg-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: -1;
+            background: rgba(0, 0, 0, 0.3);
+        }
+        h1 {
+            text-align: center;
+            margin: 30px 0;
+            font-size: 28px;
+            text-shadow: 0 0 20px rgba(100, 200, 255, 0.5), 0 2px 10px rgba(0,0,0,0.5);
+        }
+        .characters {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .character-card {
+            background: rgba(255,255,255,0.15);
+            border-radius: 12px;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid rgba(255,255,255,0.1);
+            text-decoration: none;
+            color: #fff;
+            backdrop-filter: blur(10px);
+        }
+        .character-card:hover {
+            background: rgba(100, 200, 255, 0.25);
+            border-color: rgba(100, 200, 255, 0.5);
+            transform: translateY(-5px);
+        }
+        .img-container {
+            position: relative;
+            width: 100%;
+            height: 120px;
+            border-radius: 8px;
+            overflow: hidden;
+            background: rgba(42, 45, 69, 0.8);
+        }
+        .skeleton {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.15) 50%, rgba(255,255,255,0.05) 75%);
+            background-size: 200% 100%;
+            animation: skeleton-loading 1.5s infinite;
+            z-index: 1;
+        }
+        @keyframes skeleton-loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        .img-container img {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            object-fit: cover;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+        .img-container img.loaded { opacity: 1; }
+        .img-container .img-low { z-index: 2; filter: blur(2px); }
+        .img-container .img-high { z-index: 3; }
+        .img-container.has-image .skeleton { opacity: 0; }
+        .character-card h3 { margin-top: 10px; font-size: 16px; }
+        .character-card p { font-size: 12px; opacity: 0.8; margin-top: 5px; }
+        
+        /* 设置按钮 */
+        .settings-btn {
+            position: fixed;
+            top: 15px; right: 15px;
+            width: 36px; height: 36px;
+            border: none; border-radius: 50%;
+            background: rgba(0,0,0,0.5);
+            color: #fff;
+            font-size: 18px;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            z-index: 1000;
+            transition: all 0.3s;
+        }
+        .settings-btn:hover { background: rgba(100,200,255,0.3); transform: rotate(30deg); }
+        
+        /* 设置面板 */
+        .settings-panel {
+            position: fixed;
+            top: 0; right: -320px;
+            width: 300px; height: 100%;
+            background: rgba(20,22,40,0.98);
+            backdrop-filter: blur(20px);
+            z-index: 1001;
+            padding: 20px;
+            transition: right 0.3s ease;
+            overflow-y: auto;
+        }
+        .settings-panel.open { right: 0; }
+        .settings-panel h2 { 
+            margin-bottom: 25px; 
+            font-size: 18px; 
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        /* 美化的文件选择 */
+        .upload-section {
+            margin-bottom: 20px;
+        }
+        .upload-section label {
+            display: block;
+            font-size: 13px;
+            color: rgba(255,255,255,0.7);
+            margin-bottom: 10px;
+        }
+        .upload-box {
+            position: relative;
+            width: 100%;
+            height: 80px;
+            border: 2px dashed rgba(100, 200, 255, 0.3);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: rgba(255,255,255,0.03);
+            overflow: hidden;
+        }
+        .upload-box:hover {
+            border-color: rgba(100, 200, 255, 0.6);
+            background: rgba(100, 200, 255, 0.1);
+        }
+        .upload-box.has-file {
+            border-style: solid;
+            border-color: rgba(100, 200, 255, 0.5);
+        }
+        .upload-box input {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+        .upload-box .icon {
+            font-size: 24px;
+            margin-bottom: 5px;
+            transition: transform 0.3s;
+        }
+        .upload-box:hover .icon {
+            transform: scale(1.1);
+        }
+        .upload-box .text {
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+        }
+        .upload-box .filename {
+            font-size: 11px;
+            color: rgba(100, 200, 255, 0.8);
+            margin-top: 3px;
+            max-width: 90%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .upload-box .preview {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            object-fit: cover;
+            opacity: 0.3;
+        }
+        
+        /* 按钮 */
+        .settings-panel .btn {
+            width: 100%;
+            padding: 12px;
+            margin-top: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .btn.primary {
+            background: linear-gradient(135deg, rgba(100,200,255,0.4), rgba(100,150,255,0.4));
+            color: #fff;
+            border: 1px solid rgba(100,200,255,0.3);
+        }
+        .btn.primary:hover {
+            background: linear-gradient(135deg, rgba(100,200,255,0.6), rgba(100,150,255,0.6));
+        }
+        .btn.danger {
+            background: rgba(255,100,100,0.2);
+            color: rgba(255,150,150,1);
+            border: 1px solid rgba(255,100,100,0.2);
+        }
+        .btn.danger:hover {
+            background: rgba(255,100,100,0.3);
+        }
+        
+        .settings-close {
+            position: absolute;
+            top: 15px; right: 15px;
+            background: none;
+            border: none;
+            color: rgba(255,255,255,0.5);
+            font-size: 28px;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: 32px; height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+        }
+        .settings-close:hover {
+            color: #fff;
+            background: rgba(255,255,255,0.1);
+        }
+        
+        .settings-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        .settings-overlay.open { opacity: 1; pointer-events: auto; }
+        
+        /* 分隔线 */
+        .divider {
+            height: 1px;
+            background: rgba(255,255,255,0.1);
+            margin: 20px 0;
+        }
+        
+        footer {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            text-align: center;
+            padding: 15px;
+            background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
+        }
+        footer p { font-size: 12px; opacity: 0.6; margin-bottom: 8px; }
+        .github-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #fff;
+            text-decoration: none;
+            font-size: 14px;
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.2);
+            transition: all 0.3s;
+        }
+        .github-link:hover { background: rgba(100, 200, 255, 0.3); }
+        .github-link svg { width: 20px; height: 20px; fill: #fff; }
+    </style>
+</head>
+<body>
+    <div class="bg-container">
+        <img class="bg-image" id="bg-portrait" src="bg_portrait.jpg" alt="">
+        <img class="bg-image" id="bg-landscape" src="bg_landscape.jpg" alt="">
+        <video class="bg-video" id="bg-video" loop muted playsinline></video>
+    </div>
+    <div class="bg-overlay"></div>
+    
+    <button class="settings-btn" id="settingsBtn">⚙</button>
+    
+    <div class="settings-overlay" id="settingsOverlay"></div>
+    <div class="settings-panel" id="settingsPanel">
+        <button class="settings-close" id="settingsClose">×</button>
+        <h2>⚙ 背景设置</h2>
+        
+        <div class="upload-section">
+            <label>竖屏背景</label>
+            <div class="upload-box" id="uploadPortrait">
+                <img class="preview" id="previewPortrait">
+                <span class="icon"> </span>
+                <span class="text">点击选择图片</span>
+                <span class="filename" id="filenamePortrait"></span>
+                <input type="file" id="bgPortraitInput" accept="image/*">
+            </div>
+        </div>
+        
+        <div class="upload-section">
+            <label>横屏背景</label>
+            <div class="upload-box" id="uploadLandscape">
+                <img class="preview" id="previewLandscape">
+                <span class="icon"> </span>
+                <span class="text">点击选择图片</span>
+                <span class="filename" id="filenameLandscape"></span>
+                <input type="file" id="bgLandscapeInput" accept="image/*">
+            </div>
+        </div>
+        
+        <div class="upload-section">
+            <label>视频背景</label>
+            <div class="upload-box" id="uploadVideo">
+                <span class="icon"> </span>
+                <span class="text">点击选择视频</span>
+                <span class="filename" id="filenameVideo"></span>
+                <input type="file" id="bgVideoInput" accept="video/*">
+            </div>
+        </div>
+        
+        <div class="divider"></div>
+        
+        <button class="btn danger" id="resetBg">
+            <span> </span> 恢复默认背景
+        </button>
+    </div>
+    
+    <h1>蔚蓝档案 - 记忆大厅</h1>
+    <div class="characters">
+        <a href="characters/aris/" class="character-card">
+            <div class="img-container">
+                <div class="skeleton"></div>
+                <img class="img-low" data-src="characters/aris/assets/Arisu_Low.jpg" alt="爱丽丝">
+                <img class="img-high" data-src="characters/aris/assets/Arisu_High.jpg" alt="爱丽丝">
+            </div>
+            <h3>爱丽丝</h3>
+            <p>Aris / アリス</p>
+        </a>
+    </div>
+    <footer>
+        <p>Blue Archive L2D Viewer | Powered by PixiJS + Spine</p>
+        <a href="https://github.com/hoshino01024" target="_blank" class="github-link">
+            <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+            hoshino01024
+        </a>
+    </footer>
+    <script>
+    const settingsBtn = document.getElementById('settingsBtn');
+    const settingsPanel = document.getElementById('settingsPanel');
+    const settingsOverlay = document.getElementById('settingsOverlay');
+    const settingsClose = document.getElementById('settingsClose');
+    
+    settingsBtn.onclick = () => { settingsPanel.classList.add('open'); settingsOverlay.classList.add('open'); };
+    settingsClose.onclick = () => { settingsPanel.classList.remove('open'); settingsOverlay.classList.remove('open'); };
+    settingsOverlay.onclick = () => { settingsPanel.classList.remove('open'); settingsOverlay.classList.remove('open'); };
+    
+    // 背景切换
+    function updateBackground() {
+        const portrait = document.getElementById('bg-portrait');
+        const landscape = document.getElementById('bg-landscape');
+        const video = document.getElementById('bg-video');
+        const isPortrait = window.innerHeight > window.innerWidth;
+        const hasVideo = localStorage.getItem('bgVideo');
+        
+        if (hasVideo) {
+            portrait.classList.remove('active');
+            landscape.classList.remove('active');
+            video.classList.add('active');
+            video.play();
+        } else {
+            video.classList.remove('active');
+            video.pause();
+            if (isPortrait) {
+                portrait.classList.add('active');
+                landscape.classList.remove('active');
+            } else {
+                landscape.classList.add('active');
+                portrait.classList.remove('active');
+            }
+        }
+    }
+    
+    // 加载保存的背景
+    function loadSavedBg() {
+        const portrait = localStorage.getItem('bgPortrait');
+        const landscape = localStorage.getItem('bgLandscape');
+        const video = localStorage.getItem('bgVideo');
+        if (portrait) {
+            document.getElementById('bg-portrait').src = portrait;
+            document.getElementById('previewPortrait').src = portrait;
+            document.getElementById('uploadPortrait').classList.add('has-file');
+        }
+        if (landscape) {
+            document.getElementById('bg-landscape').src = landscape;
+            document.getElementById('previewLandscape').src = landscape;
+            document.getElementById('uploadLandscape').classList.add('has-file');
+        }
+        if (video) {
+            document.getElementById('bg-video').src = video;
+            document.getElementById('uploadVideo').classList.add('has-file');
+        }
+        updateBackground();
+    }
+    loadSavedBg();
+    
+    window.addEventListener('resize', updateBackground);
+    window.addEventListener('orientationchange', () => setTimeout(updateBackground, 100));
+    
+    // 文件选择处理
+    function handleFileSelect(input, storageKey, previewId, filenameId, boxId, isVideo = false) {
+        input.onchange = (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                document.getElementById(filenameId).textContent = file.name;
+                document.getElementById(boxId).classList.add('has-file');
+                
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    localStorage.setItem(storageKey, ev.target.result);
+                    
+                    if (isVideo) {
+                        document.getElementById('bg-video').src = ev.target.result;
+                        // 清除图片背景标记
+                    } else {
+                        document.getElementById(previewId).src = ev.target.result;
+                        document.getElementById(storageKey === 'bgPortrait' ? 'bg-portrait' : 'bg-landscape').src = ev.target.result;
+                        localStorage.removeItem('bgVideo');
+                        document.getElementById('uploadVideo').classList.remove('has-file');
+                        document.getElementById('filenameVideo').textContent = '';
+                    }
+                    updateBackground();
+                };
+                reader.readAsDataURL(file);
+            }
+        };
+    }
+    
+    handleFileSelect(
+        document.getElementById('bgPortraitInput'),
+        'bgPortrait',
+        'previewPortrait',
+        'filenamePortrait',
+        'uploadPortrait'
+    );
+    
+    handleFileSelect(
+        document.getElementById('bgLandscapeInput'),
+        'bgLandscape',
+        'previewLandscape',
+        'filenameLandscape',
+        'uploadLandscape'
+    );
+    
+    handleFileSelect(
+        document.getElementById('bgVideoInput'),
+        'bgVideo',
+        null,
+        'filenameVideo',
+        'uploadVideo',
+        true
+    );
+    
+    // 重置背景
+    document.getElementById('resetBg').onclick = () => {
+        localStorage.removeItem('bgPortrait');
+        localStorage.removeItem('bgLandscape');
+        localStorage.removeItem('bgVideo');
+        document.getElementById('bg-portrait').src = 'bg_portrait.jpg';
+        document.getElementById('bg-landscape').src = 'bg_landscape.jpg';
+        document.getElementById('bg-video').src = '';
+        document.getElementById('previewPortrait').src = '';
+        document.getElementById('previewLandscape').src = '';
+        document.getElementById('filenamePortrait').textContent = '';
+        document.getElementById('filenameLandscape').textContent = '';
+        document.getElementById('filenameVideo').textContent = '';
+        document.querySelectorAll('.upload-box').forEach(b => b.classList.remove('has-file'));
+        updateBackground();
+    };
+    
+    // 角色卡片加载
+    document.querySelectorAll('.img-container').forEach(container => {
+        const lowImg = container.querySelector('.img-low');
+        const highImg = container.querySelector('.img-high');
+        if (lowImg?.dataset.src) {
+            const loader = new Image();
+            loader.onload = () => { lowImg.src = lowImg.dataset.src; lowImg.classList.add('loaded'); container.classList.add('has-image'); };
+            loader.src = lowImg.dataset.src;
+        }
+        if (highImg?.dataset.src) {
+            const loader = new Image();
+            loader.onload = () => { highImg.src = highImg.dataset.src; highImg.classList.add('loaded'); if(lowImg) lowImg.style.opacity = '0'; };
+            loader.src = highImg.dataset.src;
+        }
+    });
+    </script>
+</body>
+</html>
