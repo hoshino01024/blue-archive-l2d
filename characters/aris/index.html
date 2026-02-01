@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>蔚蓝档案 - 爱丽丝</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1c2e; }
+        #loading {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            background: #1a1c2e; color: #fff; font-family: Arial, sans-serif; z-index: 1000;
+        }
+        #loading.hidden { display: none; }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 3px solid rgba(255,255,255,0.2); border-top-color: #00bfff;
+            border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #game-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; touch-action: none; }
+        
+        /* 控制按钮 */
+        #controls {
+            position: fixed;
+            z-index: 10000;
+            display: flex;
+            gap: 8px;
+            transition: opacity 0.3s;
+        }
+        #controls.top-left { top: 12px; left: 12px; }
+        #controls.top-right { top: 12px; right: 12px; }
+        #controls.hidden { opacity: 0; pointer-events: none; }
+        
+        .ctrl-btn {
+            width: 32px; height: 32px;
+            border: none; border-radius: 50%;
+            background: rgba(0, 0, 0, 0.4);
+            color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.15);
+            transition: all 0.3s ease;
+        }
+        .ctrl-btn:hover { background: rgba(100, 200, 255, 0.3); }
+        .ctrl-btn:active { transform: scale(0.9); }
+        
+        /* 锁定按钮（始终可见） */
+        #lockBtn {
+            position: fixed;
+            top: 12px;
+            z-index: 10001;
+            transition: right 0.3s, left 0.3s;
+        }
+        #lockBtn.right { right: 12px; }
+        #lockBtn.left { right: 56px; }
+        
+        /* 设置面板 */
+        .settings-panel {
+            position: fixed;
+            top: 0; right: -280px;
+            width: 260px; height: 100%;
+            background: rgba(20,22,40,0.95);
+            backdrop-filter: blur(20px);
+            z-index: 10002;
+            padding: 60px 20px 20px;
+            transition: right 0.3s ease;
+            overflow-y: auto;
+        }
+        .settings-panel.open { right: 0; }
+        .settings-panel h3 { font-size: 16px; margin-bottom: 20px; color: #fff; }
+        .settings-panel .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .settings-panel .setting-item span { font-size: 14px; color: rgba(255,255,255,0.8); }
+        .toggle {
+            width: 44px; height: 24px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 12px;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .toggle.active { background: rgba(100,200,255,0.6); }
+        .toggle::after {
+            content: '';
+            position: absolute;
+            top: 2px; left: 2px;
+            width: 20px; height: 20px;
+            background: #fff;
+            border-radius: 50%;
+            transition: left 0.3s;
+        }
+        .toggle.active::after { left: 22px; }
+        .settings-close {
+            position: absolute;
+            top: 15px; right: 15px;
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+        }
+        .settings-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.3);
+            z-index: 10001;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        .settings-overlay.open { opacity: 1; pointer-events: auto; }
+        
+        /* 触摸特效 */
+        #touch-effects { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; pointer-events: none; }
+        .ba-cursor { position: absolute; width: 20px; height: 20px; transform: translate(-50%, -50%); display: none; }
+        .ba-cursor-inner {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 6px; height: 6px; background: #fff; border-radius: 50%;
+            box-shadow: 0 0 8px 2px rgba(100, 200, 255, 0.9), 0 0 15px 3px rgba(100, 200, 255, 0.5);
+        }
+        .ba-cursor-ring {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 18px; height: 18px; border: 1.5px solid rgba(100, 200, 255, 0.6);
+            border-radius: 50%; animation: ba-pulse 0.8s ease-out infinite;
+        }
+        @keyframes ba-pulse {
+            0% { transform: translate(-50%, -50%) scale(1); opacity: 0.6; }
+            100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+        }
+        .ba-trail {
+            position: absolute; border-radius: 50%; transform: translate(-50%, -50%);
+            background: radial-gradient(circle, rgba(150, 220, 255, 0.8) 0%, transparent 70%);
+        }
+        .ba-ripple {
+            position: absolute; transform: translate(-50%, -50%);
+            border: 1.5px solid rgba(100, 200, 255, 0.7); border-radius: 50%;
+            animation: ba-ripple-expand 0.5s ease-out forwards;
+        }
+        @keyframes ba-ripple-expand {
+            0% { width: 8px; height: 8px; opacity: 0.8; }
+            100% { width: 50px; height: 50px; opacity: 0; }
+        }
+        #char-name {
+            position: fixed; bottom: 15px; left: 50%; transform: translateX(-50%);
+            color: rgba(255,255,255,0.6); font-family: Arial; font-size: 12px;
+            z-index: 100; text-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body>
+    <div id="loading"><div class="spinner"></div><div id="load-text">正在加载...</div></div>
+    
+    <!-- 左上角：全屏+返回 -->
+    <div id="controls" class="top-left">
+        <button class="ctrl-btn" id="btn-fullscreen" title="全屏">⛶</button>
+        <button class="ctrl-btn" id="btn-back" title="返回">←</button>
+    </div>
+    
+    <!-- 右上角：设置 -->
+    <div id="controls-right" class="top-right" style="position:fixed;top:12px;right:12px;z-index:10000;display:flex;gap:8px;">
+        <button class="ctrl-btn" id="btn-settings" title="设置">⚙</button>
+    </div>
+    
+    <!-- 锁定按钮 -->
+    <button class="ctrl-btn right" id="lockBtn" title="锁定">🔓</button>
+    
+    <!-- 设置面板 -->
+    <div class="settings-overlay" id="settingsOverlay"></div>
+    <div class="settings-panel" id="settingsPanel">
+        <button class="settings-close" id="settingsClose">×</button>
+        <h3>⚙ 设置</h3>
+        <div class="setting-item">
+            <span>点击说话</span>
+            <div class="toggle active" id="toggleTalk"></div>
+        </div>
+        <div class="setting-item">
+            <span>眼神追踪</span>
+            <div class="toggle active" id="toggleTrack"></div>
+        </div>
+    </div>
+    
+    <canvas id="game-canvas"></canvas>
+    <div id="touch-effects">
+        <div class="ba-cursor" id="cursor"><div class="ba-cursor-ring"></div><div class="ba-cursor-inner"></div></div>
+    </div>
+    <div id="char-name">爱丽丝 / Aris</div>
+    
+    <script src="../../js/pixi.min.js"></script>
+    <script src="../../js/pixi-spine.js"></script>
+    <script>
+    // 设置
+    let enableTalk = true;
+    let enableTrack = true;
+    let isLocked = false;
+    
+    const controls = document.getElementById('controls');
+    const controlsRight = document.getElementById('controls-right');
+    const lockBtn = document.getElementById('lockBtn');
+    const settingsPanel = document.getElementById('settingsPanel');
+    const settingsOverlay = document.getElementById('settingsOverlay');
+    
+    // 全屏
+    document.getElementById('btn-fullscreen').onclick = () => {
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
+        else document.exitFullscreen();
+    };
+    
+    // 返回
+    document.getElementById('btn-back').onclick = () => {
+        if (document.fullscreenElement) document.exitFullscreen().then(() => location.href = '../../');
+        else location.href = '../../';
+    };
+    
+    // 设置面板
+    document.getElementById('btn-settings').onclick = () => {
+        settingsPanel.classList.add('open');
+        settingsOverlay.classList.add('open');
+    };
+    document.getElementById('settingsClose').onclick = () => {
+        settingsPanel.classList.remove('open');
+        settingsOverlay.classList.remove('open');
+    };
+    settingsOverlay.onclick = () => {
+        settingsPanel.classList.remove('open');
+        settingsOverlay.classList.remove('open');
+    };
+    
+    // 锁定
+    lockBtn.onclick = () => {
+        isLocked = !isLocked;
+        if (isLocked) {
+            controls.classList.add('hidden');
+            controlsRight.classList.add('hidden');
+            lockBtn.textContent = '🔒';
+            lockBtn.classList.remove('right');
+            lockBtn.classList.add('left');
+            lockBtn.style.right = '12px';
+            lockBtn.style.opacity = '0.3';
+        } else {
+            controls.classList.remove('hidden');
+            controlsRight.classList.remove('hidden');
+            lockBtn.textContent = '🔓';
+            lockBtn.style.right = '56px';
+            lockBtn.style.opacity = '1';
+        }
+    };
+    
+    // 开关
+    document.getElementById('toggleTalk').onclick = function() {
+        this.classList.toggle('active');
+        enableTalk = this.classList.contains('active');
+    };
+    document.getElementById('toggleTrack').onclick = function() {
+        this.classList.toggle('active');
+        enableTrack = this.classList.contains('active');
+    };
+    
+    // 触摸特效
+    const TouchFX = {
+        container: null, cursor: null, trails: [], maxTrails: 8, lastPos: { x: 0, y: 0 }, isActive: false,
+        init() { this.container = document.getElementById('touch-effects'); this.cursor = document.getElementById('cursor'); },
+        start(x, y) {
+            this.isActive = true; this.cursor.style.display = 'block';
+            this.cursor.style.left = x + 'px'; this.cursor.style.top = y + 'px';
+            this.lastPos = { x, y }; this.createRipple(x, y);
+        },
+        move(x, y) {
+            if (!this.isActive) { this.start(x, y); return; }
+            this.cursor.style.left = x + 'px'; this.cursor.style.top = y + 'px';
+            if (Math.hypot(x - this.lastPos.x, y - this.lastPos.y) > 8) { this.createTrail(this.lastPos.x, this.lastPos.y); this.lastPos = { x, y }; }
+        },
+        end() { this.isActive = false; this.cursor.style.display = 'none'; },
+        createTrail(x, y) {
+            const t = document.createElement('div'); t.className = 'ba-trail';
+            t.style.cssText = `left:${x}px;top:${y}px;width:${4+Math.random()*4}px;height:${4+Math.random()*4}px`;
+            this.container.appendChild(t); this.trails.push(t);
+            let o = 0.8;
+            const fade = () => { o -= 0.08; if (o <= 0) { t.remove(); this.trails.splice(this.trails.indexOf(t), 1); } else { t.style.opacity = o; requestAnimationFrame(fade); } };
+            requestAnimationFrame(fade);
+            while (this.trails.length > this.maxTrails) this.trails.shift().remove();
+        },
+        createRipple(x, y) {
+            const r = document.createElement('div'); r.className = 'ba-ripple';
+            r.style.cssText = `left:${x}px;top:${y}px`;
+            this.container.appendChild(r); setTimeout(() => r.remove(), 500);
+        }
+    };
+    
+    (async function() {
+        const MODEL_PATH = 'assets/Aris_home';
+        const EYE_BONES = ['Touch_Eye','Touch_Eye_Key','R_eye_default_1','R_eye_default_3','R_Eye_P_01','L_eye_default_1','L_eye_default_3','L_Eye_P_01'];
+        const HEAD_BONES = ['Head_Rot', 'Head_Rot2'];
+        const RANGE = 30, SMOOTHING = 0.15, signX = -1, signY = -1;
+        let screenW = window.innerWidth, screenH = window.innerHeight;
+        let pointer = { x: screenW/2, y: screenH/2 }, offset = { x: 0, y: 0 };
+        let canTrack = false, isIdle = false, isTalking = false;
+        let app, spine, skeleton, state, bones = { eyes: [], heads: [] }, allAnimations = [];
+        const $ = id => document.getElementById(id);
+        TouchFX.init();
+        
+        function waitForLibs() {
+            return new Promise((resolve, reject) => {
+                let n = 0;
+                const check = () => { n++; if (PIXI?.spine?.Spine) resolve(); else if (n > 50) reject(new Error('库加载超时')); else setTimeout(check, 100); };
+                check();
+            });
+        }
+        
+        function randomTalk() {
+            if (!enableTalk || !isIdle || isTalking) return;
+            const talks = allAnimations.filter(n => n.startsWith('Talk_') && n.endsWith('_M'));
+            if (!talks.length) return;
+            const anim = talks[Math.floor(Math.random() * talks.length)];
+            isTalking = true; isIdle = false;
+            state.setAnimation(1, anim, false);
+            const a = anim.replace('_M', '_A');
+            if (allAnimations.includes(a)) state.setAnimation(2, a, false);
+        }
+        
+        try {
+            await waitForLibs();
+            const canvas = $('game-canvas');
+            app = new PIXI.Application({ view: canvas, width: screenW, height: screenH, backgroundColor: 0x1a1c2e, resolution: devicePixelRatio || 1, autoDensity: true });
+            $('load-text').textContent = '加载模型...';
+            let spineData;
+            try { spineData = await PIXI.Assets.load({ src: MODEL_PATH + '.skel', data: { spineAtlasFile: MODEL_PATH + '.atlas' } }); }
+            catch { await PIXI.Assets.load(MODEL_PATH + '.atlas'); spineData = await PIXI.Assets.load(MODEL_PATH + '.skel'); }
+            spine = new PIXI.spine.Spine(spineData.spineData || spineData);
+            skeleton = spine.skeleton; state = spine.state; state.data.defaultMix = 0.2;
+            allAnimations = (spine.spineData || skeleton.data).animations.map(a => a.name);
+            EYE_BONES.forEach(n => { const b = skeleton.findBone(n); if (b) bones.eyes.push({ bone: b, baseX: b.x, baseY: b.y }); });
+            HEAD_BONES.forEach(n => { const b = skeleton.findBone(n); if (b) bones.heads.push({ bone: b, baseX: b.x, baseY: b.y }); });
+            
+            function resize() {
+                screenW = innerWidth; screenH = innerHeight;
+                app.renderer.resize(screenW, screenH);
+                spine.scale.set(Math.max(0.2, Math.min(0.6, Math.min(screenW / 800, screenH / 1200) * 0.8)));
+                spine.x = screenW / 2; spine.y = screenH * 0.9;
+            }
+            resize(); app.stage.addChild(spine);
+            state.setAnimation(0, 'Start_Idle_01', false);
+            state.addListener({
+                complete: e => {
+                    if (e.animation.name === 'Start_Idle_01') { state.setAnimation(0, 'Idle_01', true); canTrack = true; isIdle = true; }
+                    if (e.trackIndex === 1 && e.animation.name.startsWith('Talk_')) { state.setEmptyAnimation(1, 0.2); state.setEmptyAnimation(2, 0.2); isTalking = false; isIdle = true; }
+                }
+            });
+            
+            const onStart = e => { const {clientX: x, clientY: y} = e.touches?.[0] || e; pointer.x = x; pointer.y = y; TouchFX.start(x, y); };
+            const onMove = e => { const {clientX: x, clientY: y} = e.touches?.[0] || e; pointer.x = x; pointer.y = y; TouchFX.move(x, y); };
+            const onEnd = () => TouchFX.end();
+            const onClick = () => randomTalk();
+            
+            canvas.addEventListener('mousedown', onStart);
+            canvas.addEventListener('mousemove', onMove);
+            canvas.addEventListener('mouseup', onEnd);
+            canvas.addEventListener('mouseleave', onEnd);
+            canvas.addEventListener('click', onClick);
+            canvas.addEventListener('touchstart', onStart, { passive: true });
+            canvas.addEventListener('touchmove', onMove, { passive: true });
+            canvas.addEventListener('touchend', e => { onEnd(); onClick(); });
+            addEventListener('resize', resize);
+            
+            app.ticker.add(() => {
+                if (!canTrack || !enableTrack) return;
+                const faceX = screenW / 2, faceY = screenH * 0.25;
+                let dx = Math.max(-1, Math.min(1, (pointer.x - faceX) / (screenW * 0.35)));
+                let dy = Math.max(-1, Math.min(1, (pointer.y - faceY) / (screenH * 0.35)));
+                offset.x += (dx - offset.x) * SMOOTHING;
+                offset.y += (dy - offset.y) * SMOOTHING;
+                const bx = offset.x * signX, by = offset.y * signY;
+                bones.eyes.forEach(e => { e.bone.x = e.baseX + by * RANGE; e.bone.y = e.baseY + bx * RANGE; });
+                bones.heads.forEach(h => { h.bone.x = h.baseX + by * RANGE * 0.5; h.bone.y = h.baseY + bx * RANGE * 0.5; });
+            });
+            
+            $('loading').classList.add('hidden');
+        } catch (err) { $('loading').innerHTML = `<div style="color:red;padding:20px">错误: ${err.message}</div>`; }
+    })();
+    </script>
+</body>
+</html>
+
